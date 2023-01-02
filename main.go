@@ -1,16 +1,17 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/tls"
 	"database/sql"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
+	"golang.org/x/term"
 
 	gogpt "github.com/sashabaranov/go-gpt3"
 )
@@ -116,10 +117,27 @@ func main() {
 
 	tablePrefix := buildTablePrefix(db)
 
+	oldState, err := term.MakeRaw(0)
+	panicErr(err)
+
+	defer term.Restore(0, oldState)
+	screen := struct {
+		io.Reader
+		io.Writer
+	}{os.Stdin, os.Stdout}
+	term := term.NewTerminal(screen, "")
+	term.SetPrompt(string(term.Escape.Red) + "prompt> " + string(term.Escape.Reset))
+
 	for {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("prompt> ")
-		prompt, _ := reader.ReadString('\n')
+		prompt, err := term.ReadLine()
+		if err == io.EOF {
+			return
+		}
+		panicErr(err)
+
+		if prompt == "" {
+			continue
+		}
 
 		s := fmt.Sprintf("%s-- %s\n", tablePrefix, prompt)
 		if *verbose {
@@ -129,6 +147,7 @@ func main() {
 		req := buildRequest(s)
 		resp, err := c.CreateCompletion(ctx, req)
 		panicErr(err)
-		fmt.Println(resp.Choices[0].Text)
+
+		fmt.Fprintln(term, resp.Choices[0].Text)
 	}
 }
