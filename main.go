@@ -78,7 +78,7 @@ func buildTablePrefix(db *sql.DB) string {
 	}
 
 	var tablePrefix string
-	tablePrefix = "# MySQL table\n"
+	tablePrefix = "### MySQL SQL tables, with their properties:\n#\n"
 	for _, tableName := range tableNames {
 		s := fmt.Sprintf(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
 WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s';`, *database, tableName)
@@ -97,11 +97,7 @@ WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s';`, *database, tableName)
 		tablePrefix += fmt.Sprintf("# Table %s, columns = [%s]\n", tableName, strings.Join(columnNames, ", "))
 	}
 
-	tablePrefix += `
-# only output SQL 
-# if no SQL can be generated, output "No SQL Generated"
-
-`
+	tablePrefix += "#\n"
 
 	return tablePrefix
 }
@@ -139,15 +135,21 @@ func main() {
 			continue
 		}
 
-		s := fmt.Sprintf("%s-- %s\n", tablePrefix, prompt)
+		// refer https://beta.openai.com/examples/default-sql-translate
+		s := fmt.Sprintf("%s### %s\nSELECT", tablePrefix, prompt)
 		if *verbose {
-			println(s)
+			fmt.Fprintln(term, string(term.Escape.Yellow)+s+string(term.Escape.Reset))
 		}
 
 		req := buildRequest(s)
 		resp, err := c.CreateCompletion(ctx, req)
 		panicErr(err)
 
-		fmt.Fprintln(term, resp.Choices[0].Text)
+		line := resp.Choices[0].Text
+		// Mostly, the response misses the SELECT keyword.
+		if !strings.HasPrefix(line, "SELECT") {
+			line = "SELECT " + strings.TrimSpace(line)
+		}
+		fmt.Fprintln(term, string(term.Escape.Green)+line+string(term.Escape.Reset))
 	}
 }
