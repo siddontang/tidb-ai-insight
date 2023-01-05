@@ -91,10 +91,13 @@ WHERE TABLE_SCHEMA = '%s' AND TABLE_NAME = '%s';`, *database, tableName)
 			var columnName string
 			err := columns.Scan(&columnName)
 			panicErr(err)
+			if strings.Contains(columnName, " ") {
+				columnName = fmt.Sprintf("`%s`", columnName)
+			}
 			columnNames = append(columnNames, columnName)
 		}
 
-		tablePrefix += fmt.Sprintf("# Table %s, columns = [%s]\n", tableName, strings.Join(columnNames, ", "))
+		tablePrefix += fmt.Sprintf("# Table %s.%s, columns = [%s]\n", *database, tableName, strings.Join(columnNames, ", "))
 	}
 
 	tablePrefix += "#\n"
